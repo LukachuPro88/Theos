@@ -6,6 +6,8 @@ GDT_32_CODE_SEG equ 0x08
 GDT_32_DATA_SEG equ 0x10
 GDT_64_CODE_SEG equ 0x18  ; New 64-bit code selector
 
+extern kernel_main        ; Declare the external kernel main entry point
+
 start:
     ; Zero segment registers and set up stack
     xor ax, ax
@@ -123,12 +125,28 @@ protected_mode:
 ; -------- 64-bit Long Mode --------
 [BITS 64]
 long_mode:
-    ; Write 'L' to VGA to confirm we're in long mode
-    mov rax, 0x0F4C0F4C0F4C0F4C     ; 'L' with white on black, repeated
-    mov qword [0xB8000], rax
+    ; Clean data segment registers for 64-bit mode
+    xor ax, ax
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
 
+    ; Set up a proper 64-bit stack pointer
+    mov rsp, 0x90000            
+
+    ; Align the stack to 16-bytes for System V AMD64 ABI compliance
+    and rsp, ~0xF               
+    
+    ; Jump to the high-level kernel entry point
+    call kernel_main
+
+    ; If the kernel ever returns, halt the CPU
+.hang:
     cli
     hlt
+    jmp .hang
 ; ----------------
 
 ; -------- GDT --------
