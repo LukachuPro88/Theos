@@ -1,28 +1,33 @@
 # Paths
-BOOT_SRC   := src/boot/boot.asm
-BOOT_BIN   := build/boot.bin
-BUILD_DIR  := build
+BOOT_SRC    := src/boot/boot.asm
+STAGE2_SRC  := src/boot/stage2.asm
+BOOT_BIN    := build/boot.bin
+STAGE2_BIN  := build/stage2.bin
+DISK_IMG    := build/theos.img
+BUILD_DIR   := build
 
-# Tools
-NASM  := nasm
-QEMU  := qemu-system-x86_64
+NASM := nasm
+QEMU := qemu-system-x86_64
 
 .PHONY: all run clean
 
-all: $(BOOT_BIN)
+all: $(DISK_IMG)
 
-# Assemble the bootloader
-$(BOOT_BIN): $(BOOT_SRC) | $(BUILD_DIR)
-	$(NASM) -f bin $< -o $@
-
-# Create build dir if it doesn't exist
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-# Run in QEMU
-run: $(BOOT_BIN)
-	$(QEMU) -drive format=raw,file=$(BOOT_BIN) -no-reboot
+$(BOOT_BIN): $(BOOT_SRC) | $(BUILD_DIR)
+	$(NASM) -f bin $< -o $@
 
-# Clean build artifacts
+$(STAGE2_BIN): $(STAGE2_SRC) | $(BUILD_DIR)
+	$(NASM) -f bin $< -o $@
+
+# Combine both stages into one disk image
+$(DISK_IMG): $(BOOT_BIN) $(STAGE2_BIN)
+	cat $(BOOT_BIN) $(STAGE2_BIN) > $(DISK_IMG)
+
+run: $(DISK_IMG)
+	$(QEMU) -drive format=raw,file=$(DISK_IMG) -no-reboot
+
 clean:
 	rm -rf $(BUILD_DIR)
