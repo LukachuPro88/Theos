@@ -52,11 +52,64 @@ protected_mode:
     mov ss, ax
     mov esp, 0x90000        ; new 32-bit stack
 
-    ; Can't use BIOS interrupts anymore so we write directly to VGA
-    mov edi, 0xB8000        ; VGA text buffer address
-    mov al, 'P'             ; character
-    mov ah, 0x0F            ; white on black
-    mov [edi], ax           ; write to screen
+    ; -------- Page Tables --------
+    ; Clear memory for page tables (0x1000 - 0x5000)
+    mov edi, 0x1000         ; start of page table area
+    mov cr3, edi            ; tell CPU where PML4 lives
+    xor eax, eax
+    mov ecx, 4096           ; clear 4096 * 4 bytes = 16KB
+    rep stosd               ; fill with zeros
+    mov edi, cr3            ; reset edi back to PML4
+
+    ; PML4 entry → points to PDPT at 0x2000
+    mov dword [edi], 0x2003         ; present + writable
+    add edi, 0x1000
+
+    ; PDPT entry → points to PD at 0x3000
+    mov dword [edi], 0x3003         ; present + writable
+    add edi, 0x1000
+
+    ; PD entry → points to PT at 0x4000
+    mov dword [edi], 0x4003         ; present + writable
+    add edi, 0x1000
+
+    ; PT entries → map first 2MB (512 pages of 4KB)
+    mov ebx, 0x00000003             ; first page, present + writable
+    mov ecx, 512                    ; 512 entries
+.map_pt:
+    mov dword [edi], ebx
+    add ebx, 0x1000                 ; next 4KB page
+    add edi, 8                      ; next PT entry
+    loop .map_pt
+    ; ----------------
+
+    ; -------- Enter Long Mode --------
+    ; Enable PAE (Physical Address Extension) — required for long mode
+    mov eax, cr4
+    or eax, 1 << 5
+    mov cr4, eax
+
+    ; Set LME (Long Mode Enable) bit in EFER MSR
+    mov ecx, 0xC0000080             ; EFER MSR number
+    rdmsr                           ; read it
+    or eax, 1 << 8                  ; set LME bit
+    wrmsr                           ; write it back
+
+    ; Enable paging — this activates long mode
+    mov eax, cr0
+    or eax, 1 << 31
+    mov cr0, eax
+
+    ; Far jump to 64-bit code, flushes pipeline
+    jmp CODE_SEG:long_mode
+    ; ----------------
+
+; -------- 64-bit Long Mode --------
+[BITS 64]
+long_mode:
+    ; Write 'L' to VGA to confirm we're in long mode
+    mov rax, 0x0F4C0F4C0F4C0F4C     ; 'L' with white on black, repeated
+    mov qword [0xB8000], rax
 
     cli
     hlt
@@ -74,7 +127,7 @@ gdt_code:               ; entry 1 - code segment
     dw 0                ; base low
     db 0                ; base middle
     db 10011010b        ; access byte (present, ring 0, code, executable, readable)
-    db 11001111b        ; flags + limit high (32-bit, 4KB granularity)
+    db 10101111b        ; flags + limit high (64-bit, 4KB granularity)
     db 0                ; base high
 
 gdt_data:               ; entry 2 - data segment
