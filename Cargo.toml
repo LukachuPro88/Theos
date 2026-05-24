@@ -1,6 +1,15 @@
 [package]
 name = "theos"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
-[dependencies]
+[lib]
+name = "kernel"
+path = "src/kernel/lib.rs"  # Pointing directly to your library file
+crate-type = ["staticlib"]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
