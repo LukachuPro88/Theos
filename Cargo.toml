@@ -5,8 +5,10 @@ edition = "2021"
 
 [lib]
 name = "kernel"
-path = "src/kernel/lib.rs"  # Pointing directly to your library file
+path = "src/kernel/lib.rs"
 crate-type = ["staticlib"]
+test = false
+bench = false
 
 [profile.dev]
 panic = "abort"
