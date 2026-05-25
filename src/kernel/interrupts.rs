@@ -1,6 +1,10 @@
 use crate::idt::InterruptDescriptorTable;
 use crate::io::{inb, outb};
 
+/// A temporary atomic-like raw tracker for the current cursor column position.
+/// This prevents characters from stacking on top of each other.
+static mut TEXT_CURSOR_POS: isize = 0;
+
 /// Represents the fundamental execution context pushed onto the stack
 /// by x86-64 hardware before routing execution to an exception handler.
 #[repr(C)]
@@ -112,12 +116,28 @@ pub extern "x86-interrupt" fn keyboard_handler(_frame: InterruptStackFrame) {
         // Ensure the keypress is a "make" code (pressed down) and within our array bounds
         if scancode & 0x80 == 0 && (scancode as usize) < SCANCODE_TO_ASCII.len() {
             let character = SCANCODE_TO_ASCII[scancode as usize];
+            let vga_buffer = 0xB8000 as *mut u8;
 
-            if character != '\0' {
-                // For a raw test directly to the top-left of the VGA screen:
-                let vga_buffer = 0xB8000 as *mut u8;
-                *vga_buffer = character as u8; // Writes the actual letter
-                *vga_buffer.offset(1) = 0x0A; // Green text attribute
+            if character == '\x08' {
+                // Backspace logic: Move back 1 character cell (2 bytes) if we aren't at the start
+                if TEXT_CURSOR_POS > 0 {
+                    TEXT_CURSOR_POS -= 2;
+                    // Wipe the character on screen by replacing it with a blank space
+                    *vga_buffer.offset(TEXT_CURSOR_POS) = b' ';
+                    *vga_buffer.offset(TEXT_CURSOR_POS + 1) = 0x07; // Default dim gray attribute
+                }
+            } else if character != '\0' {
+                // Regular character logic: Write character and advance cursor
+                *vga_buffer.offset(TEXT_CURSOR_POS) = character as u8;
+                *vga_buffer.offset(TEXT_CURSOR_POS + 1) = 0x0A; // Green text attribute
+
+                TEXT_CURSOR_POS += 2;
+
+                // Screen boundary guard: Wrap back to top left if the screen fills up
+                // 80 columns * 25 rows * 2 bytes/cell = 4000 bytes
+                if TEXT_CURSOR_POS >= 4000 {
+                    TEXT_CURSOR_POS = 0;
+                }
             }
         }
 
