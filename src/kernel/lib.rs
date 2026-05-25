@@ -2,6 +2,7 @@
 #![no_main]
 
 pub mod drivers;
+pub mod idt;
 
 use core::panic::PanicInfo;
 
