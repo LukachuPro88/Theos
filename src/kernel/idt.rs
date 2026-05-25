@@ -22,6 +22,22 @@ pub struct IdtEntry {
     reserved: u32,
 }
 
+/// The 64-bit IDT register structure (IDTR) format required by the native `lidt` assembly instruction.
+#[derive(Copy, Clone)]
+#[repr(C, packed)]
+pub struct IdtPtr {
+    /// The maximum size limit of the complete IDT array in bytes minus 1.
+    limit: u16,
+    /// The exact 64-bit linear virtual memory address where the IDT array begins.
+    base: u64,
+}
+
+/// The main structure representing all 256 execution vectors available to the x86-64 processor.
+#[repr(C, align(16))]
+pub struct InterruptDescriptorTable {
+    entries: [IdtEntry; 256],
+}
+
 impl IdtEntry {
     /// Creates a zero-initialized, inactive IDT gate placeholder.
     ///
@@ -50,5 +66,37 @@ impl IdtEntry {
         self.pointer_middle = (handler_addr >> 16) as u16;
         self.pointer_high = (handler_addr >> 32) as u32;
         self.reserved = 0;
+    }
+}
+
+impl InterruptDescriptorTable {
+    /// Instantiates a completely clear, missing IDT table matrix.
+    pub const fn new() -> Self {
+        Self {
+            entries: [IdtEntry::missing(); 256],
+        }
+    }
+
+    /// Accesses a mutable reference to a specific gate index vector (0..255).
+    pub fn edit_entry(&mut self, index: usize) -> &mut IdtEntry {
+        &mut self.entries[index]
+    }
+
+    /// Generates a hardware-compatible pointer structure and executes the native `lidt` instruction.
+    ///
+    /// # Safety
+    /// This function directly manipulates CPU control registers. An incorrectly configured IDT
+    /// will result in an immediate unrecoverable Triple Fault upon the next hardware interrupt.
+    pub unsafe fn load(&self) {
+        let ptr = IdtPtr {
+            limit: (core::mem::size_of::<Self>() - 1) as u16,
+            base: self as *const Self as u64,
+        };
+
+        core::arch::asm!(
+            "lidt [{}]",
+            in(reg) &ptr,
+            options(readonly, nostack, preserves_flags)
+        );
     }
 }
