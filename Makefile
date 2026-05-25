@@ -9,8 +9,7 @@ BUILD_DIR   := build
 LINKER_SCR  := linker.ld
 
 # Rust Configuration
-RUST_TARGET := x86_64-unknown-none
-RUST_LIB    := target/$(RUST_TARGET)/release/libkernel.a
+RUST_LIB    := target/x86_64-unknown-none/release/libkernel.a
 
 # Tools
 NASM := nasm
@@ -29,7 +28,7 @@ $(STAGE2_OBJ): $(STAGE2_SRC) | $(BUILD_DIR)
 	$(NASM) -f elf64 $< -o $@
 
 $(RUST_LIB): $(KERNEL_SRC) Cargo.toml
-	cargo build --target $(RUST_TARGET) --release
+	cargo build --release
 
 $(STAGE2_BIN): $(STAGE2_OBJ) $(RUST_LIB) $(LINKER_SCR)
 	$(LD) -T $(LINKER_SCR) $(STAGE2_OBJ) $(RUST_LIB) -o $@

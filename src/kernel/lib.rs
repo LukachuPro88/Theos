@@ -1,8 +1,10 @@
+#![feature(abi_x86_interrupt)]
 #![no_std]
 #![no_main]
 
 pub mod drivers;
 pub mod idt;
+pub mod interrupts;
 
 use core::panic::PanicInfo;
 
