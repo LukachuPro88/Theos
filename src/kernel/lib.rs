@@ -10,52 +10,73 @@ pub mod io;
 use core::panic::PanicInfo;
 
 /// Handles Theos kernel panic
-/// 
+///
 /// Triggers when unrecoverable error happens within the kernel
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    // Disable interrupts immediately so no hardware events disrupt the panic screen
     unsafe {
-        core::arch::asm!("cli");
+        core::arch::asm!("cli"); // Disable interrupts immediately
     }
 
-    // Create a dedicated ScreenWriter for the crash screen (White text on Red background)
-    let mut panic_writer =
-        drivers::vga::ScreenWriter::new(drivers::vga::Color::White, drivers::vga::Color::Red);
+    let mut w =
+        drivers::vga::ScreenWriter::new(drivers::vga::Color::LightRed, drivers::vga::Color::Black);
+    w.clear_screen();
 
-    // Flash the entire screen red to wipe away the working state
-    panic_writer.clear_screen();
-
-    // Print a dramatic, scary kernel panic header
-    panic_writer.write_string(
+    w.write_string(
         "================================================================================\n",
     );
-    panic_writer.write_string(
-        "               !!! THEOS KERNEL PANIC !!! CAUGHT UNRECOVERABLE ERROR !!!        \n",
+
+    w.write_string("panicpanicpanic - KERNEL PANIC - panicpanicpanic");
+    w.write_string("\n");
+    w.write_string(
+        "--------------------------------------------------------------------------------\n",
     );
-    panic_writer.write_string(
-        "================================================================================\n\n",
-    );
-    panic_writer.write_string(
-        "The operating system dropped execution parameters to prevent hardware damage.\n\n",
+    w.write_string("\n");
+    w.write_string("  THEOS has encountered a fatal exception and cannot continue.\n");
+    w.write_string("  The kernel has been halted to prevent damage to your system.\n");
+    w.write_string("\n");
+    w.write_string(
+        "--------------------------------------------------------------------------------\n",
     );
 
-    // Print the file location where the panic originated
-    panic_writer.write_string("CRASH LOCATION:\n  ");
+    // Print panic location if available
     if let Some(location) = info.location() {
-        panic_writer.write_string(location.file());
-        panic_writer.write_string(" at line ");
-        // Since we can't format integers easily without standard library macros yet,
-        // this points us directly to the source file.
-    } else {
-        panic_writer.write_string("Unknown Location");
+        w.write_string("  FAULT LOCATION : ");
+        w.write_string(location.file());
+        w.write_string("\n");
     }
-    panic_writer.write_string("\n\n");
 
-    panic_writer.write_string("SYSTEM STATUS: Halted.\n");
-    panic_writer.write_string("Please restart your machine manually.");
+    // Stable bare-metal method to extract and display the panic message payload
+    w.write_string("  FAULT REASON   : ");
+    if let Some(msg) = info.message().as_str() {
+        w.write_string(msg);
+    } else {
+        w.write_string(
+            "A formatted runtime assertion failed. (Check source code for macro specifics)",
+        );
+    }
+    w.write_string("\n");
 
-    // Lock the CPU cores permanently
+    w.write_string("\n");
+    w.write_string(
+        "--------------------------------------------------------------------------------\n",
+    );
+    w.write_string("\n");
+    w.write_string("  PROCESSOR STATE : HALTED\n");
+    w.write_string("  INTERRUPTS      : DISABLED\n");
+    w.write_string("  RECOVERY        : NOT POSSIBLE\n");
+    w.write_string("\n");
+    w.write_string("  If this is your first time seeing this screen, restart your machine.\n");
+    w.write_string("  If this screen appears again, your kernel is corrupted.\n");
+    w.write_string("\n");
+    w.write_string(
+        "================================================================================\n",
+    );
+    w.write_string("  * SYSTEM HALTED *\n");
+    w.write_string(
+        "================================================================================\n",
+    );
+
     loop {
         unsafe {
             core::arch::asm!("hlt");
@@ -75,10 +96,11 @@ pub extern "C" fn kernel_main() -> ! {
     // Safely print strings using architectural hardware abstraction
     writer.write_string("Theos Kernel v0.1.0 Successfully Loaded!\n");
 
-    // 1. Load the IDT structure and remap the hardware PICs
+    // Test kernel panic — Uncomment to panic
+    // panic!("Testing kernel panic system");
+
     interrupts::init_idt();
 
-    // 2. CRITICAL: Fire the "Set Interrupt Flag" assembly command.
     // This opens up the CPU gates so it starts listening to the PIC.
     unsafe {
         core::arch::asm!("sti");
@@ -87,8 +109,6 @@ pub extern "C" fn kernel_main() -> ! {
     // 3. Safe infinite execution parking lot
     loop {
         unsafe {
-            // "hlt" pauses the CPU until an external hardware interrupt (like a keypress) wakes it up.
-            // This keeps your system stable and stops it from eating 100% of your host machine's CPU thread.
             core::arch::asm!("hlt");
         }
     }
