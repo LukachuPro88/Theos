@@ -1,7 +1,7 @@
 use crate::idt::InterruptDescriptorTable;
-use crate::io::inb;
+use crate::io::{inb, outb};
 
-/// Represents the fundamental execution context context pushed onto the stack
+/// Represents the fundamental execution context pushed onto the stack
 /// by x86-64 hardware before routing execution to an exception handler.
 #[repr(C)]
 pub struct InterruptStackFrame {
@@ -23,20 +23,51 @@ pub struct InterruptStackFrame {
 /// mutable to allow early-boot runtime registration of handler functions.
 static mut IDT: InterruptDescriptorTable = InterruptDescriptorTable::new();
 
-/// Initializes the IDT matrix, registers exception handlers, and loads the table register.
+/// Remaps the legacy Programmable Interrupt Controllers (PIC) so hardware interrupts
+/// do not overlap with native CPU exceptions (0x00 - 0x1F).
+unsafe fn remap_pic() {
+    // ICW1: Start initialization sequence for both PICs
+    outb(0x20, 0x11);
+    outb(0xA0, 0x11);
+
+    // ICW2: Set vector offsets (Master PIC = 0x20, Slave PIC = 0x28)
+    outb(0x21, 0x20);
+    outb(0xA1, 0x28);
+
+    // ICW3: Tell Master PIC that there is a slave PIC at IRQ2 (0x04)
+    outb(0x21, 0x04);
+    // Tell Slave PIC its cascade identity (0x02)
+    outb(0xA1, 0x02);
+
+    // ICW4: Set 8086/88 mode
+    outb(0x21, 0x01);
+    outb(0xA1, 0x01);
+
+    // Clear masks to enable hardware interrupts
+    outb(0x21, 0x00);
+    outb(0xA1, 0x00);
+}
+
+/// Initializes the IDT matrix, registers exception handlers, remaps the PIC, and loads the table register.
 ///
 /// This safely structures the vector mappings before communicating the table address
 /// directly to the CPU control registers.
-/// Initializes the IDT matrix, registers exception handlers, and loads the table register.
 #[allow(static_mut_refs)]
 pub fn init_idt() {
     unsafe {
-        // Fixes function_casts_as_integer by passing through a raw pointer first
-        let handler_address = breakpoint_handler as *const () as u64;
-        IDT.edit_entry(3).set_handler(handler_address);
+        // Breakpoint Handler (Vector 3)
+        let bp_address = breakpoint_handler as *const () as u64;
+        IDT.edit_entry(3).set_handler(bp_address);
+
+        // Keyboard Handler (Vector 33 / 0x21)
+        let kb_address = keyboard_handler as *const () as u64;
+        IDT.edit_entry(0x21).set_handler(kb_address);
 
         // Instruct the CPU to activate this table
         IDT.load();
+
+        // Configure hardware routing
+        remap_pic();
     }
 }
 
@@ -45,27 +76,36 @@ pub fn init_idt() {
 /// Uses the unstable "x86-interrupt" ABI calling convention to safely clean
 /// up the custom hardware stack frame upon execution completion.
 pub extern "x86-interrupt" fn breakpoint_handler(_frame: InterruptStackFrame) {
-    // Access your vga::ScreenWriter here to print a diagnostic message!
-    // For now, we trap the CPU to prevent it from wandering off.
     loop {}
 }
 
 /// The Keyboard Interrupt Service Routine (IRQ 1 / Vector 0x21).
 pub extern "x86-interrupt" fn keyboard_handler(_frame: InterruptStackFrame) {
     unsafe {
-        // Read the raw scancode from the keyboard controller data port
         let scancode = inb(0x60);
 
-        // TODO: Map the raw scancode to an ASCII byte.
-        // For example, scancode 0x1E is the 'A' key press.
-        if scancode == 0x1E {
-            // Call your VGA driver to write the character here!
-            // crate::drivers::vga::print_char('A');
+        // A basic look-up array where index = scancode, value = ASCII character
+        // This covers a few basic keys on a standard US keyboard map
+        const SCANCODE_TO_ASCII: [char; 58] = [
+            '\0', '\x1B', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08', '\t',
+            'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n', '\0', 'a', 's', 'd',
+            'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', '\0', '\\', 'z', 'x', 'c', 'v', 'b', 'n',
+            'm', ',', '.', '/', '\0', '*', '\0', ' ',
+        ];
+
+        // Ensure the keypress is a "make" code (pressed down) and within our array bounds
+        if scancode & 0x80 == 0 && (scancode as usize) < SCANCODE_TO_ASCII.len() {
+            let character = SCANCODE_TO_ASCII[scancode as usize];
+
+            if character != '\0' {
+                // For a raw test directly to the top-left of the VGA screen:
+                let vga_buffer = 0xB8000 as *mut u8;
+                *vga_buffer = character as u8; // Writes the actual letter
+                *vga_buffer.offset(1) = 0x0A; // Green text attribute
+            }
         }
 
-        // CRITICAL FOR HARDWARE INTERRUPTS:
-        // We must send an End of Interrupt (EOI) signal to the PIC controllers
-        // so they know they can send the next keypress signal.
-        inb(0x20); // Sending a dummy read or explicit EOI command port write
+        // Inform the PIC that the interrupt traffic clear is complete
+        outb(0x20, 0x20);
     }
 }
