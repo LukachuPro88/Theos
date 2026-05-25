@@ -5,6 +5,7 @@
 pub mod drivers;
 pub mod idt;
 pub mod interrupts;
+pub mod io;
 
 use core::panic::PanicInfo;
 
