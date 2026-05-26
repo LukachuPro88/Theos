@@ -3,7 +3,7 @@ use crate::io::{inb, outb};
 
 /// A temporary atomic-like raw tracker for the current cursor column position.
 /// This prevents characters from stacking on top of each other.
-static mut TEXT_CURSOR_POS: isize = 0;
+static mut TEXT_CURSOR_POS: isize = 320;
 
 /// Represents the fundamental execution context pushed onto the stack
 /// by x86-64 hardware before routing execution to an exception handler.
@@ -76,9 +76,7 @@ pub fn init_idt() {
         IDT.load();
         remap_pic();
         enable_cursor();
-
-        // Configure hardware routing
-        remap_pic();
+        sync_hardware_cursor();
     }
 }
 
