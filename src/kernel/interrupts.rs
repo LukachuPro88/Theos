@@ -1,3 +1,4 @@
+use crate::globals::SCANCODE_TO_ASCII;
 use crate::idt::InterruptDescriptorTable;
 use crate::io::{inb, outb};
 
@@ -106,12 +107,6 @@ pub extern "x86-interrupt" fn keyboard_handler(_frame: InterruptStackFrame) {
 
         // A basic look-up array where index = scancode, value = ASCII character
         // This covers a few basic keys on a standard US keyboard map
-        const SCANCODE_TO_ASCII: [char; 58] = [
-            '\0', '\x1B', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08', '\t',
-            'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n', '\0', 'a', 's', 'd',
-            'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', '\0', '\\', 'z', 'x', 'c', 'v', 'b', 'n',
-            'm', ',', '.', '/', '\0', '*', '\0', ' ',
-        ];
 
         // Ensure the keypress is a "make" code (pressed down) and within our array bounds
         if scancode & 0x80 == 0 && (scancode as usize) < SCANCODE_TO_ASCII.len() {

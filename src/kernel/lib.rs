@@ -3,6 +3,7 @@
 #![no_main]
 
 pub mod drivers;
+pub mod globals;
 pub mod idt;
 pub mod interrupts;
 pub mod io;
