@@ -61,8 +61,10 @@ impl IdtEntry {
     /// `0x8E00` (Present, Ring 0, 64-bit Interrupt Gate).
     pub fn set_handler(&mut self, handler_addr: u64) {
         self.pointer_low = handler_addr as u16;
-        self.gdt_selector = 0x18;
+        self.gdt_selector = 0x18; // Matches your CS = 0018 from the QEMU trace log
+
         self.options = 0x8E00;
+
         self.pointer_middle = (handler_addr >> 16) as u16;
         self.pointer_high = (handler_addr >> 32) as u32;
         self.reserved = 0;
