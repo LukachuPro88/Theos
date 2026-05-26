@@ -74,6 +74,8 @@ pub fn init_idt() {
 
         // Instruct the CPU to activate this table
         IDT.load();
+        remap_pic();
+        enable_cursor();
 
         // Configure hardware routing
         remap_pic();
@@ -141,7 +143,29 @@ pub extern "x86-interrupt" fn keyboard_handler(_frame: InterruptStackFrame) {
             }
         }
 
+        sync_hardware_cursor();
+
         // Inform the PIC that the interrupt traffic clear is complete
         outb(0x20, 0x20);
     }
+}
+
+/// Enables the VGA cursor
+unsafe fn enable_cursor() {
+    outb(0x3D4, 0x0A);
+    let val = inb(0x3D5);
+    outb(0x3D5, (val & 0xC0) | 14);
+
+    outb(0x3D4, 0x0B);
+    let val = inb(0x3D5);
+    outb(0x3D5, (val & 0xE0) | 15);
+}
+
+/// Syncs the VGA cursor
+unsafe fn sync_hardware_cursor() {
+    let offset = (TEXT_CURSOR_POS / 2) as u16;
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (offset & 0xFF) as u8);
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, ((offset >> 8) & 0xFF) as u8);
 }
