@@ -75,8 +75,8 @@ make run
 theos/
 ├── src/
 │   ├── boot/          # MBR bootloader (x86 assembly)
-│   ├── kernel/        # Rust kernel entry point and core logic
-│   └── drivers/       # Hardware drivers (VGA, keyboard, etc.)
+│   └── kernel/        # Rust kernel entry point and core logic
+│         └── drivers/ # Hardware drivers (VGA, keyboard, etc.)
 ├── Cargo.toml
 ├── Makefile
 └── README.md

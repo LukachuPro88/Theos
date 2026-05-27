@@ -1,5 +1,4 @@
 [BITS 16]
-[ORG 0x7e00]
 
 ; segment selector offsets
 GDT_32_CODE_SEG equ 0x08
@@ -7,6 +6,7 @@ GDT_32_DATA_SEG equ 0x10
 GDT_64_CODE_SEG equ 0x18  ; New 64-bit code selector
 
 extern kernel_main        ; Declare the external kernel main entry point
+global start              ; Expose the entry point symbol globally so linker.ld can see it
 
 start:
     ; Zero segment registers and set up stack
@@ -192,4 +192,5 @@ msg_start  db "Stage 2 loaded", 0x0D, 0x0A, 0
 msg_a20    db "A20 enabled",    0x0D, 0x0A, 0
 msg_gdt    db "GDT loaded",     0x0D, 0x0A, 0
 
-times 1024 - ($ - $$) db 0
+; Note: The fixed binary footer 'times 1024' block has been removed. 
+; The layout sizes are now dynamically calculated and packed by linker.ld.

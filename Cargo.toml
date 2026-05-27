@@ -1,6 +1,20 @@
 [package]
 name = "theos"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
-[dependencies]
+[lib]
+name = "kernel"
+path = "src/kernel/lib.rs"
+crate-type = ["staticlib"]
+test = false
+bench = false
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = "z"      # Explicitly optimize for the absolute smallest binary footprint
+lto = true           # Link-Time Optimization: discards unused code across modules completely
+codegen-units = 1    # Disables parallel compilation to maximize size optimization passes

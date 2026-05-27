@@ -13,9 +13,8 @@ start:
   mov si, msg
   call print
 
-  call load_second_stage
-
-  hlt
+  ; Fall straight through to avoid leaving unreturned call frames on the stack
+  jmp load_second_stage
 
 print:
   mov ah, 0x0e
@@ -28,10 +27,16 @@ print:
 .done:
   ret
 
-; Load second stage since 512 bytes isnt enough for the kernel
+; Load second stage dynamically based on compilation size
 load_second_stage:
   mov ah, 0x02
-  mov al, 2
+  
+  %ifdef SECTOR_COUNT
+    mov al, SECTOR_COUNT   ; Uses the exact sector count calculated by the Makefile
+  %else
+    mov al, 20             ; Fallback safety value if compiled manually
+  %endif
+
   mov ch, 0
   mov cl, 2
   mov dh, 0
