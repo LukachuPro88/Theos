@@ -31,6 +31,29 @@ start:
     call print
 
     cli                 ; disable interrupts before GDT
+
+    ; Query memory map via BIOS INT 0x15, E820
+    ; Store entries at 0x7000
+    e820:
+        mov di, 0x7000          ; buffer to store entries
+        xor ebx, ebx            ; continuation = 0 (first call)
+        xor bp, bp              ; entry count
+    .loop:
+        mov eax, 0xE820
+        mov edx, 0x534D4150     ; magic: "SMAP"
+        mov ecx, 24             ; entry size
+        int 0x15
+        jc .done                ; carry = no more entries or error
+        cmp eax, 0x534D4150     ; verify BIOS returned "SMAP"
+        jne .done
+        test ebx, ebx           ; ebx=0 means last entry
+        je .done
+        add di, 24
+        inc bp
+        jmp .loop
+    .done:
+        mov [0x6FF8], bp        ; store entry count just before the buffer
+
     lgdt [gdt_descriptor]
 
     ; Enter protected mode
@@ -137,7 +160,10 @@ long_mode:
     mov rsp, 0x90000            
 
     ; Align the stack to 16-bytes for System V AMD64 ABI compliance
-    and rsp, ~0xF               
+    and rsp, ~0xF        
+
+    movzx rdi, word [0x6ff8]
+    mov rsi, 0x7000       
     
     ; Jump to the high-level kernel entry point
     call kernel_main
